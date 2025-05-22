@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Flappy Bird Mini 3D</title>
+    <style>
+      /* style giữ nguyên y như bản trước */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #87ceeb;
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        text-align: center;
+        color: #fff;
+        user-select: none;
+        overflow: hidden;
+      }
+      h1 {
+        margin: 20px 0;
+        text-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+      }
+      canvas {
+        display: block;
+        margin: 0 auto;
+        background: linear-gradient(to top, #4facfe 0%, #00f2fe 100%);
+        border-radius: 15px;
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+      }
+      p {
+        margin-top: 10px;
+        font-weight: 600;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Flappy Bird Mini 3D</h1>
+    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <p>Ấn phím cách (Space) hoặc chạm để bay!</p>
+
+    <script>
+      const canvas = document.getElementById("gameCanvas");
+      const ctx = canvas.getContext("2d");
+
+      const bird = {
+        x: 80,
+        y: 250,
+        radius: 20,
+        velocity: 0,
+        gravity: 0.6,
+        lift: -10,
+        rotation: 0,
+      };
+
+      let pipes = [];
+      const pipeWidth = 60;
+      // khoảng cách khe hở giữa 2 ống (pipe gap) giữ nguyên
+      const pipeGap = 200;
+      let frame = 0;
+      let score = 0;
+      let gameOver = false;
+
+      const clouds = [];
+      for (let i = 0; i < 6; i++) {
+        clouds.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * 150 + 20,
+          radius: 30 + Math.random() * 20,
+          speed: 0.5 + Math.random() * 0.3,
+        });
+      }
+
+      function drawCloud(cloud) {
+        ctx.fillStyle = "rgba(255,255,255,0.8)";
+        ctx.beginPath();
+        ctx.ellipse(
+          cloud.x,
+          cloud.y,
+          cloud.radius,
+          cloud.radius * 0.6,
+          0,
+          0,
+          2 * Math.PI
+        );
+        ctx.fill();
+        ctx.beginPath();
+        ctx.ellipse(
+          cloud.x + cloud.radius * 0.7,
+          cloud.y + 10,
+          cloud.radius * 0.7,
+          cloud.radius * 0.5,
+          0,
+          0,
+          2 * Math.PI
+        );
+        ctx.fill();
+      }
+
+      function drawPipe3D(pipe) {
+        const x = pipe.x;
+        const top = pipe.top;
+
+        ctx.fillStyle = "#2e7d32";
+        ctx.fillRect(x, 0, pipeWidth, top);
+
+        ctx.fillStyle = "#1b5e20";
+        ctx.fillRect(x + pipeWidth - 15, 0, 15, top);
+
+        ctx.fillStyle = "#4caf50";
+        ctx.beginPath();
+        ctx.moveTo(x, top);
+        ctx.lineTo(x + pipeWidth, top);
+        ctx.lineTo(x + pipeWidth - 15, top + 15);
+        ctx.lineTo(x + 15, top + 15);
+        ctx.closePath();
+        ctx.fill();
+
+        const bottomY = top + pipeGap;
+        const bottomHeight = canvas.height - bottomY;
+
+        ctx.fillStyle = "#2e7d32";
+        ctx.fillRect(x, bottomY, pipeWidth, bottomHeight);
+
+        ctx.fillStyle = "#1b5e20";
+        ctx.fillRect(x + pipeWidth - 15, bottomY, 15, bottomHeight);
+
+        ctx.fillStyle = "#4caf50";
+        ctx.beginPath();
+        ctx.moveTo(x, bottomY);
+        ctx.lineTo(x + pipeWidth, bottomY);
+        ctx.lineTo(x + pipeWidth - 15, bottomY - 15);
+        ctx.lineTo(x + 15, bottomY - 15);
+        ctx.closePath();
+        ctx.fill();
+      }
+
+      function drawBird() {
+        ctx.save();
+        ctx.translate(bird.x, bird.y);
+        ctx.rotate(bird.rotation);
+
+        const gradient = ctx.createRadialGradient(
+          0,
+          0,
+          bird.radius * 0.3,
+          0,
+          0,
+          bird.radius
+        );
+        gradient.addColorStop(0, "#fff59d");
+        gradient.addColorStop(1, "#fbc02d");
+
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bird.radius, bird.radius * 0.8, 0, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = "#fdd835";
+        ctx.beginPath();
+        ctx.ellipse(
+          bird.radius * 0.4,
+          0,
+          bird.radius * 0.4,
+          bird.radius * 0.2,
+          Math.PI / 6,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+
+        ctx.fillStyle = "#000";
+        ctx.beginPath();
+        ctx.arc(
+          bird.radius * 0.3,
+          -bird.radius * 0.2,
+          bird.radius * 0.15,
+          0,
+          Math.PI * 2
+        );
+        ctx.fill();
+
+        ctx.restore();
+      }
+
+      function updatePipes() {
+        // Giảm khoảng cách giữa các cột từ 140 frame xuống còn 90 frame
+        if (frame % 90 === 0) {
+          let top = Math.random() * 250 + 50;
+          pipes.push({ x: canvas.width, top: top, passed: false });
+        }
+
+        pipes.forEach((pipe) => {
+          pipe.x -= 3;
+
+          if (!pipe.passed && pipe.x + pipeWidth < bird.x) {
+            score++;
+            pipe.passed = true;
+          }
+
+          if (
+            bird.x + bird.radius > pipe.x &&
+            bird.x - bird.radius < pipe.x + pipeWidth &&
+            (bird.y - bird.radius < pipe.top ||
+              bird.y + bird.radius > pipe.top + pipeGap)
+          ) {
+            gameOver = true;
+          }
+        });
+
+        pipes = pipes.filter((pipe) => pipe.x + pipeWidth > 0);
+      }
+
+      function drawScore() {
+        ctx.fillStyle = "#fff";
+        ctx.font = '28px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+        ctx.shadowColor = "rgba(0,0,0,0.7)";
+        ctx.shadowBlur = 5;
+        ctx.fillText("Điểm: " + score, 20, 40);
+        ctx.shadowBlur = 0;
+      }
+
+      function drawGameOver() {
+        ctx.fillStyle = "#e53935";
+        ctx.font = '48px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+        ctx.fillText("GAME OVER", 80, canvas.height / 2 - 20);
+        ctx.font = '28px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+        ctx.fillText("Điểm của bạn: " + score, 110, canvas.height / 2 + 30);
+        ctx.font = '18px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+        ctx.fillText(
+          "Ấn Space hoặc chạm để chơi lại",
+          90,
+          canvas.height / 2 + 70
+        );
+      }
+
+      function updateClouds() {
+        clouds.forEach((cloud) => {
+          cloud.x += cloud.speed;
+          if (cloud.x - cloud.radius > canvas.width) {
+            cloud.x = -cloud.radius;
+            cloud.y = Math.random() * 150 + 20;
+            cloud.radius = 30 + Math.random() * 20;
+            cloud.speed = 0.5 + Math.random() * 0.3;
+          }
+        });
+      }
+
+      function drawClouds() {
+        clouds.forEach(drawCloud);
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        drawClouds();
+        updateClouds();
+
+        pipes.forEach(drawPipe3D);
+
+        drawBird();
+
+        drawScore();
+
+        if (gameOver) {
+          drawGameOver();
+          return;
+        }
+
+        bird.velocity += bird.gravity;
+        bird.y += bird.velocity;
+
+        bird.rotation = Math.min(Math.max(bird.velocity / 10, -0.5), 0.8);
+
+        if (bird.y + bird.radius > canvas.height || bird.y - bird.radius < 0) {
+          gameOver = true;
+        }
+
+        updatePipes();
+
+        frame++;
+        requestAnimationFrame(draw);
+      }
+
+      function resetGame() {
+        bird.y = 250;
+        bird.velocity = 0;
+        bird.rotation = 0;
+        pipes = [];
+        frame = 0;
+        score = 0;
+        gameOver = false;
+        draw();
+      }
+
+      document.addEventListener("keydown", (e) => {
+        if (e.code === "Space") {
+          if (gameOver) resetGame();
+          else bird.velocity = bird.lift;
+        }
+      });
+
+      canvas.addEventListener("click", () => {
+        if (gameOver) resetGame();
+        else bird.velocity = bird.lift;
+      });
+
+      draw();
+    </script>
+  </body>
+</html>
