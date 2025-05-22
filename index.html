@@ -6,7 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no"
     />
-    <title>Flappy Bird Mini - Chim Đơn Giản</title>
+    <title>Flappy Bird Mini - Dễ Chơi Hơn</title>
     <style>
       /* --- CSS Chung cho Toàn Trang --- */
       * {
@@ -98,8 +98,12 @@
         y: 0, // Vị trí Y đã scale
         size: 0, // Kích thước đã scale (chim là hình vuông)
         velocity: 0,
-        baseGravity: 0.6,
-        baseLift: -10,
+        // --- ĐIỀU CHỈNH TRỌNG LỰC VÀ LỰC NÂNG TẠI ĐÂY ---
+        baseGravity: 0.4, // Giảm trọng lực (trước đây là 0.6)
+        baseLift: -7, // Giảm lực nâng (trước đây là -10, giá trị âm nhỏ hơn nghĩa là bay lên ít hơn sau mỗi lần chạm)
+        // Lưu ý: -7 sẽ làm chim bay lên ít hơn, nhưng vì trọng lực giảm, nó vẫn dễ kiểm soát hơn.
+        // Nếu bạn muốn chim bay lên mạnh hơn sau mỗi lần chạm, hãy giữ giá trị âm lớn hơn (ví dụ: -12).
+        // Hãy thử nghiệm để tìm giá trị phù hợp nhất với bạn.
         gravity: 0, // Trọng lực đã scale
         lift: 0, // Lực nâng đã scale
         rotation: 0, // Góc quay của chim
@@ -561,17 +565,28 @@
       function draw() {
         ctx.clearRect(0, 0, canvas.width, canvas.height); // Xóa toàn bộ canvas
 
-        // Vẽ các yếu tố theo lớp (từ xa đến gần)
+        // --- Thứ tự vẽ các yếu tố (từ xa đến gần) ---
+
+        // 1. Vẽ nền trời và mặt đất
         drawBackground();
-        farClouds.forEach((cloud) => drawCloud(cloud, 0.6)); // Mây xa hơn, trong suốt hơn
-        updateClouds(); // Cập nhật vị trí mây
 
-        pipes.forEach(drawPipe3D); // Vẽ ống nước
-        drawBird(); // Vẽ chim
+        // 2. Vẽ mây xa (far clouds) - Đằng sau ống nước
+        farClouds.forEach((cloud) => drawCloud(cloud, 0.6));
 
-        closeClouds.forEach((cloud) => drawCloud(cloud, 0.9)); // Mây gần hơn, ít trong suốt hơn
+        // 3. Cập nhật vị trí mây (cập nhật trước khi vẽ các thứ khác để hiệu ứng động)
+        updateClouds();
 
-        drawScore(); // Vẽ điểm số
+        // 4. Vẽ ống nước
+        pipes.forEach(drawPipe3D);
+
+        // 5. Vẽ chim
+        drawBird();
+
+        // 6. Vẽ mây gần (close clouds) - Đằng trước ống nước
+        closeClouds.forEach((cloud) => drawCloud(cloud, 0.9));
+
+        // 7. Vẽ điểm số
+        drawScore();
 
         // Nếu game over, chỉ hiển thị màn hình game over và dừng cập nhật game
         if (gameOver) {
