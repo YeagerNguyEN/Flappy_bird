@@ -2,80 +2,217 @@
 <html lang="vi">
   <head>
     <meta charset="UTF-8" />
-    <title>Flappy Bird Mini 3D</title>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1, user-scalable=no"
+    />
+    <title>Flappy Bird Mini - Chim Đơn Giản</title>
     <style>
-      /* style giữ nguyên y như bản trước */
+      /* --- CSS Chung cho Toàn Trang --- */
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
       body {
-        background: #87ceeb;
+        background: #87ceeb; /* Màu nền dự phòng */
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
         text-align: center;
         color: #fff;
         user-select: none;
-        overflow: hidden;
+        overflow: hidden; /* Ngăn cuộn trang */
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        width: 100vw;
+        height: 100vh;
       }
+
+      /* --- Tiêu Đề Game --- */
       h1 {
-        margin: 20px 0;
+        margin: 1vh 0; /* Sử dụng vh để responsive tốt hơn */
         text-shadow: 0 2px 5px rgba(0, 0, 0, 0.4);
+        font-size: 5vw; /* Kích thước chữ responsive */
+        white-space: nowrap; /* Ngăn chữ xuống dòng */
+        z-index: 10; /* Đảm bảo nằm trên canvas */
+        pointer-events: none; /* Không chặn click/touch */
       }
+
+      /* --- Canvas của Game --- */
       canvas {
         display: block;
-        margin: 0 auto;
-        background: linear-gradient(to top, #4facfe 0%, #00f2fe 100%);
-        border-radius: 15px;
-        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2);
+        background: linear-gradient(
+          to top,
+          #4facfe 0%,
+          #00f2fe 100%
+        ); /* Nền trời mặc định */
+        border-radius: 15px; /* Bo tròn góc canvas */
+        box-shadow: 0 10px 20px rgba(0, 0, 0, 0.2); /* Đổ bóng cho canvas */
+        width: 100vw; /* Chiều rộng full màn hình */
+        height: 100vh; /* Chiều cao full màn hình */
       }
+
+      /* --- Hướng Dẫn Điều Khiển --- */
       p {
-        margin-top: 10px;
+        margin-top: 1vh; /* Sử dụng vh để responsive tốt hơn */
         font-weight: 600;
         text-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        font-size: 3vw; /* Kích thước chữ responsive */
+        white-space: nowrap;
+        z-index: 10; /* Đảm bảo nằm trên canvas */
+        pointer-events: none; /* Không chặn click/touch */
+      }
+
+      /* --- Media Queries để điều chỉnh font size trên màn hình lớn hơn --- */
+      @media (min-width: 600px) {
+        h1 {
+          font-size: 30px; /* Kích thước cố định trên desktop */
+        }
+        p {
+          font-size: 18px; /* Kích thước cố định trên desktop */
+        }
       }
     </style>
   </head>
   <body>
-    <h1>Flappy Bird Mini 3D</h1>
-    <canvas id="gameCanvas" width="400" height="600"></canvas>
+    <h1>Flappy Bird Mini</h1>
+    <canvas id="gameCanvas"></canvas>
     <p>Ấn phím cách (Space) hoặc chạm để bay!</p>
 
     <script>
       const canvas = document.getElementById("gameCanvas");
       const ctx = canvas.getContext("2d");
 
+      // Kích thước game gốc để scaling (được thiết kế ở 400x600)
+      const BASE_GAME_WIDTH = 400;
+      const BASE_GAME_HEIGHT = 600;
+      let currentScale = 1; // Hệ số tỉ lệ hiện tại
+
+      // --- Định nghĩa đối tượng chim (đơn giản hóa) ---
       const bird = {
-        x: 80,
-        y: 250,
-        radius: 20,
+        baseX: 80,
+        baseY: 250,
+        baseSize: 20, // Kích thước cơ bản của chim (hình vuông)
+        x: 0, // Vị trí X đã scale
+        y: 0, // Vị trí Y đã scale
+        size: 0, // Kích thước đã scale (chim là hình vuông)
         velocity: 0,
-        gravity: 0.6,
-        lift: -10,
-        rotation: 0,
+        baseGravity: 0.6,
+        baseLift: -10,
+        gravity: 0, // Trọng lực đã scale
+        lift: 0, // Lực nâng đã scale
+        rotation: 0, // Góc quay của chim
+        color: "#fdd835", // Màu vàng cho chim
+        eyeColor: "#000",
+        beakColor: "#e65100", // Màu cam cho mỏ
+        wingColor: "rgba(255, 255, 255, 0.7)", // Màu cánh (hơi trong suốt)
+        wingAngle: 0, // Góc cánh để tạo animation
+        wingAmplitude: Math.PI / 4, // Biên độ đập cánh
+        wingSpeed: 0.2, // Tốc độ đập cánh
       };
 
+      // --- Định nghĩa các thuộc tính game khác ---
       let pipes = [];
-      const pipeWidth = 60;
-      // khoảng cách khe hở giữa 2 ống (pipe gap) giữ nguyên
-      const pipeGap = 200;
+      const basePipeWidth = 60;
+      const basePipeGap = 200;
+      let pipeWidth = 0;
+      let pipeGap = 0;
       let frame = 0;
       let score = 0;
       let gameOver = false;
 
-      const clouds = [];
-      for (let i = 0; i < 6; i++) {
-        clouds.push({
-          x: Math.random() * canvas.width,
-          y: Math.random() * 150 + 20,
-          radius: 30 + Math.random() * 20,
-          speed: 0.5 + Math.random() * 0.3,
+      // --- Mây (Far Clouds - Lớp nền xa, di chuyển chậm) ---
+      const farClouds = [];
+      const baseFarCloudSpeed = 0.1;
+      const numFarClouds = 3;
+      for (let i = 0; i < numFarClouds; i++) {
+        farClouds.push({
+          baseX: Math.random() * BASE_GAME_WIDTH,
+          baseY: Math.random() * (BASE_GAME_HEIGHT * 0.2), // Mây ở cao
+          baseRadius: 40 + Math.random() * 20, // Kích thước mây
+          baseSpeed: baseFarCloudSpeed + Math.random() * 0.1,
+          x: 0,
+          y: 0,
+          radius: 0,
+          speed: 0,
         });
       }
 
-      function drawCloud(cloud) {
-        ctx.fillStyle = "rgba(255,255,255,0.8)";
+      // --- Mây (Close Clouds - Lớp nền gần, di chuyển nhanh hơn) ---
+      const closeClouds = [];
+      const baseCloseCloudSpeed = 0.3;
+      const numCloseClouds = 5;
+      for (let i = 0; i < numCloseClouds; i++) {
+        closeClouds.push({
+          baseX: Math.random() * BASE_GAME_WIDTH,
+          baseY:
+            Math.random() * (BASE_GAME_HEIGHT * 0.3) + BASE_GAME_HEIGHT * 0.1, // Mây thấp hơn chút
+          baseRadius: 25 + Math.random() * 15,
+          baseSpeed: baseCloseCloudSpeed + Math.random() * 0.2,
+          x: 0,
+          y: 0,
+          radius: 0,
+          speed: 0,
+        });
+      }
+
+      // --- Hàm điều chỉnh kích thước canvas và các yếu tố game khi màn hình thay đổi (Responsive) ---
+      function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+
+        const widthRatio = canvas.width / BASE_GAME_WIDTH;
+        const heightRatio = canvas.height / BASE_GAME_HEIGHT;
+        currentScale = Math.min(widthRatio, heightRatio); // Giữ tỷ lệ khung hình và scale theo chiều nhỏ hơn
+
+        // Áp dụng scale cho các thuộc tính của chim
+        bird.x = bird.baseX * currentScale;
+        bird.y = bird.baseY * currentScale;
+        bird.size = bird.baseSize * currentScale;
+        bird.gravity = bird.baseGravity * currentScale;
+        bird.lift = bird.baseLift * currentScale;
+
+        // Áp dụng scale cho các thuộc tính của ống nước
+        pipeWidth = basePipeWidth * currentScale;
+        // Đảm bảo pipeGap tối thiểu để chim có thể lọt qua dễ dàng hơn trên màn hình nhỏ
+        pipeGap = Math.max(basePipeGap * currentScale, bird.size * 2.5); // Ví dụ: gap tối thiểu 2.5 lần chiều cao chim
+
+        // Áp dụng scale cho các thuộc tính của mây
+        farClouds.forEach((cloud) => {
+          cloud.x = cloud.baseX * currentScale;
+          cloud.y = cloud.baseY * currentScale;
+          cloud.radius = cloud.baseRadius * currentScale;
+          cloud.speed = cloud.baseSpeed * currentScale;
+        });
+
+        closeClouds.forEach((cloud) => {
+          cloud.x = cloud.baseX * currentScale;
+          cloud.y = cloud.baseY * currentScale;
+          cloud.radius = cloud.baseRadius * currentScale;
+          cloud.speed = cloud.baseSpeed * currentScale;
+        });
+
+        // Áp dụng scale cho các ống nước hiện có (đảm bảo chúng không bị lệch)
+        pipes.forEach((pipe) => {
+          pipe.x = pipe.baseX * currentScale;
+          pipe.top = pipe.baseTop * currentScale;
+        });
+
+        // Đảm bảo chim không bị đẩy ra ngoài màn hình sau khi resize (giữ nguyên vị trí tương đối)
+        if (!gameOver) {
+          bird.y = Math.min(
+            Math.max(bird.y, bird.size / 2),
+            canvas.height - bird.size / 2
+          );
+        }
+      }
+
+      // --- Hàm vẽ một đám mây ---
+      function drawCloud(cloud, alpha = 0.8) {
+        ctx.fillStyle = `rgba(255,255,255,${alpha})`;
         ctx.beginPath();
+        // Các hình ellipse chồng lên nhau để tạo hình dáng mây tự nhiên hơn
         ctx.ellipse(
           cloud.x,
           cloud.y,
@@ -83,100 +220,171 @@
           cloud.radius * 0.6,
           0,
           0,
-          2 * Math.PI
+          Math.PI * 2
         );
-        ctx.fill();
-        ctx.beginPath();
         ctx.ellipse(
-          cloud.x + cloud.radius * 0.7,
-          cloud.y + 10,
+          cloud.x + cloud.radius * 0.5,
+          cloud.y - cloud.radius * 0.2,
           cloud.radius * 0.7,
           cloud.radius * 0.5,
           0,
           0,
-          2 * Math.PI
+          Math.PI * 2
+        );
+        ctx.ellipse(
+          cloud.x - cloud.radius * 0.4,
+          cloud.y + cloud.radius * 0.1,
+          cloud.radius * 0.6,
+          cloud.radius * 0.4,
+          0,
+          0,
+          Math.PI * 2
         );
         ctx.fill();
       }
 
+      // --- Hàm vẽ ống nước với đồ họa 3D chi tiết hơn ---
       function drawPipe3D(pipe) {
         const x = pipe.x;
         const top = pipe.top;
+        const bottomY = top + pipeGap;
 
-        ctx.fillStyle = "#2e7d32";
+        // --- Thân ống trên ---
+        const topPipeGradient = ctx.createLinearGradient(
+          x,
+          0,
+          x + pipeWidth,
+          0
+        );
+        topPipeGradient.addColorStop(0, "#2e7d32"); // Xanh đậm
+        topPipeGradient.addColorStop(0.5, "#4caf50"); // Xanh sáng
+        topPipeGradient.addColorStop(1, "#2e7d32"); // Xanh đậm
+        ctx.fillStyle = topPipeGradient;
         ctx.fillRect(x, 0, pipeWidth, top);
 
-        ctx.fillStyle = "#1b5e20";
-        ctx.fillRect(x + pipeWidth - 15, 0, 15, top);
+        // --- Thân ống dưới ---
+        const bottomPipeGradient = ctx.createLinearGradient(
+          x,
+          bottomY,
+          x + pipeWidth,
+          bottomY
+        );
+        bottomPipeGradient.addColorStop(0, "#2e7d32");
+        bottomPipeGradient.addColorStop(0.5, "#4caf50");
+        bottomPipeGradient.addColorStop(1, "#2e7d32");
+        ctx.fillStyle = bottomPipeGradient;
+        ctx.fillRect(x, bottomY, pipeWidth, canvas.height - bottomY);
 
-        ctx.fillStyle = "#4caf50";
+        // --- Mặt bên của ống (tạo chiều sâu) ---
+        ctx.fillStyle = "#1b5e20"; // Màu xanh rất đậm
+        const sideThickness = 10 * currentScale; // Độ dày cạnh ống
+        ctx.fillRect(x + pipeWidth - sideThickness, 0, sideThickness, top);
+        ctx.fillRect(
+          x + pipeWidth - sideThickness,
+          bottomY,
+          sideThickness,
+          canvas.height - bottomY
+        );
+
+        // --- Nắp ống trên (tạo cảm giác nhô ra) ---
+        ctx.fillStyle = "#66bb6a"; // Màu xanh hơi sáng hơn thân
         ctx.beginPath();
         ctx.moveTo(x, top);
         ctx.lineTo(x + pipeWidth, top);
-        ctx.lineTo(x + pipeWidth - 15, top + 15);
-        ctx.lineTo(x + 15, top + 15);
+        ctx.lineTo(x + pipeWidth - sideThickness, top + sideThickness);
+        ctx.lineTo(x + sideThickness, top + sideThickness);
         ctx.closePath();
         ctx.fill();
 
-        const bottomY = top + pipeGap;
-        const bottomHeight = canvas.height - bottomY;
-
-        ctx.fillStyle = "#2e7d32";
-        ctx.fillRect(x, bottomY, pipeWidth, bottomHeight);
-
-        ctx.fillStyle = "#1b5e20";
-        ctx.fillRect(x + pipeWidth - 15, bottomY, 15, bottomHeight);
-
-        ctx.fillStyle = "#4caf50";
+        // --- Nắp ống dưới ---
+        ctx.fillStyle = "#66bb6a";
         ctx.beginPath();
         ctx.moveTo(x, bottomY);
         ctx.lineTo(x + pipeWidth, bottomY);
-        ctx.lineTo(x + pipeWidth - 15, bottomY - 15);
-        ctx.lineTo(x + 15, bottomY - 15);
+        ctx.lineTo(x + pipeWidth - sideThickness, bottomY - sideThickness);
+        ctx.lineTo(x + sideThickness, bottomY - sideThickness);
         ctx.closePath();
         ctx.fill();
+
+        // --- Các đường viền/chi tiết bề mặt ống (tạo cảm giác gạch/khối) ---
+        ctx.strokeStyle = "#1b5e20"; // Màu đường viền
+        ctx.lineWidth = 1 * currentScale;
+        // Đường ngang trên thân ống trên
+        for (let i = 1; i < top / (30 * currentScale); i++) {
+          ctx.beginPath();
+          ctx.moveTo(x, i * 30 * currentScale);
+          ctx.lineTo(x + pipeWidth, i * 30 * currentScale);
+          ctx.stroke();
+        }
+        // Đường ngang trên thân ống dưới
+        for (
+          let i = 1;
+          i < (canvas.height - bottomY) / (30 * currentScale);
+          i++
+        ) {
+          ctx.beginPath();
+          ctx.moveTo(x, bottomY + i * 30 * currentScale);
+          ctx.lineTo(x + pipeWidth, bottomY + i * 30 * currentScale);
+          ctx.stroke();
+        }
+        // Đường dọc giữa ống
+        ctx.beginPath();
+        ctx.moveTo(x + pipeWidth / 2, 0);
+        ctx.lineTo(x + pipeWidth / 2, top + sideThickness);
+        ctx.moveTo(x + pipeWidth / 2, bottomY - sideThickness);
+        ctx.lineTo(x + pipeWidth / 2, canvas.height);
+        ctx.stroke();
       }
 
+      // --- HÀM VẼ CHIM (ĐƠN GIẢN HÓA) ---
       function drawBird() {
         ctx.save();
+        // Dịch chuyển đến tâm của chim để xoay dễ hơn
         ctx.translate(bird.x, bird.y);
         ctx.rotate(bird.rotation);
 
-        const gradient = ctx.createRadialGradient(
-          0,
-          0,
-          bird.radius * 0.3,
-          0,
-          0,
-          bird.radius
-        );
-        gradient.addColorStop(0, "#fff59d");
-        gradient.addColorStop(1, "#fbc02d");
+        // Cập nhật góc cánh để tạo animation đập cánh
+        bird.wingAngle = bird.wingAmplitude * Math.sin(frame * bird.wingSpeed);
 
-        ctx.fillStyle = gradient;
+        // --- Thân chim (hình tròn) ---
+        ctx.fillStyle = bird.color;
         ctx.beginPath();
-        ctx.ellipse(0, 0, bird.radius, bird.radius * 0.8, 0, 0, Math.PI * 2);
+        ctx.arc(0, 0, bird.size / 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = "rgba(0,0,0,0.2)"; // Viền nhẹ
+        ctx.lineWidth = 1 * currentScale;
+        ctx.stroke();
+
+        // --- Mỏ chim (hình tam giác) ---
+        ctx.fillStyle = bird.beakColor;
+        ctx.beginPath();
+        ctx.moveTo(bird.size / 2 - 2 * currentScale, -3 * currentScale);
+        ctx.lineTo(bird.size / 2 + 8 * currentScale, 0);
+        ctx.lineTo(bird.size / 2 - 2 * currentScale, 3 * currentScale);
+        ctx.closePath();
         ctx.fill();
 
-        ctx.fillStyle = "#fdd835";
+        // --- Mắt chim (hình tròn nhỏ) ---
+        ctx.fillStyle = bird.eyeColor;
         ctx.beginPath();
-        ctx.ellipse(
-          bird.radius * 0.4,
-          0,
-          bird.radius * 0.4,
-          bird.radius * 0.2,
-          Math.PI / 6,
+        ctx.arc(
+          bird.size / 2 - 5 * currentScale,
+          -5 * currentScale,
+          2 * currentScale,
           0,
           Math.PI * 2
         );
         ctx.fill();
 
-        ctx.fillStyle = "#000";
+        // --- Cánh chim (hình elip/giọt nước) ---
+        ctx.fillStyle = bird.wingColor;
         ctx.beginPath();
-        ctx.arc(
-          bird.radius * 0.3,
-          -bird.radius * 0.2,
-          bird.radius * 0.15,
+        ctx.ellipse(
+          -bird.size / 4,
+          0,
+          bird.size / 2.5,
+          bird.size / 4,
+          bird.wingAngle, // Áp dụng góc cánh
           0,
           Math.PI * 2
         );
@@ -185,129 +393,275 @@
         ctx.restore();
       }
 
+      // --- Cập nhật vị trí ống nước và kiểm tra va chạm ---
       function updatePipes() {
-        // Giảm khoảng cách giữa các cột từ 140 frame xuống còn 90 frame
-        if (frame % 90 === 0) {
-          let top = Math.random() * 250 + 50;
-          pipes.push({ x: canvas.width, top: top, passed: false });
+        // Tạo ống mới định kỳ
+        if (frame % Math.floor(90 / currentScale) === 0) {
+          // Vị trí top ngẫu nhiên của ống trên
+          let top = Math.random() * (BASE_GAME_HEIGHT - basePipeGap - 180) + 90; // Đảm bảo ống không quá cao/thấp
+          pipes.push({
+            x: canvas.width, // Bắt đầu từ ngoài cùng bên phải màn hình
+            top: top * currentScale, // Top của ống trên (đã scale)
+            baseX: canvas.width / currentScale, // Vị trí X gốc để responsive
+            baseTop: top, // Vị trí Top gốc để responsive
+            passed: false, // Đánh dấu đã qua ống chưa để tính điểm
+          });
         }
 
         pipes.forEach((pipe) => {
-          pipe.x -= 3;
+          pipe.x -= 3 * currentScale; // Ống di chuyển sang trái
 
+          // Kiểm tra chim đã vượt qua ống chưa để tăng điểm
+          // (Khi tâm chim vượt qua cạnh phải của ống)
           if (!pipe.passed && pipe.x + pipeWidth < bird.x) {
             score++;
             pipe.passed = true;
           }
 
+          // --- Kiểm tra va chạm (sử dụng kích thước hình tròn của chim) ---
+          // Đây là kiểm tra va chạm hình hộp đơn giản (Axis-Aligned Bounding Box - AABB)
+          // Điều chỉnh để phù hợp với kích thước hình tròn của chim
           if (
-            bird.x + bird.radius > pipe.x &&
-            bird.x - bird.radius < pipe.x + pipeWidth &&
-            (bird.y - bird.radius < pipe.top ||
-              bird.y + bird.radius > pipe.top + pipeGap)
+            bird.x + bird.size / 2 > pipe.x && // Cạnh phải chim vượt qua cạnh trái ống
+            bird.x - bird.size / 2 < pipe.x + pipeWidth && // Cạnh trái chim vượt qua cạnh phải ống
+            (bird.y - bird.size / 2 < pipe.top || // Chim chạm vào ống trên
+              bird.y + bird.size / 2 > pipe.top + pipeGap) // Chim chạm vào ống dưới
           ) {
             gameOver = true;
           }
         });
 
-        pipes = pipes.filter((pipe) => pipe.x + pipeWidth > 0);
+        // Xóa các ống đã ra khỏi màn hình
+        pipes = pipes.filter((pipe) => pipe.x + pipeWidth > -pipeWidth);
       }
 
+      // --- Vẽ điểm số ---
       function drawScore() {
         ctx.fillStyle = "#fff";
-        ctx.font = '28px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
+        ctx.font = `${
+          28 * currentScale
+        }px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
         ctx.shadowColor = "rgba(0,0,0,0.7)";
-        ctx.shadowBlur = 5;
-        ctx.fillText("Điểm: " + score, 20, 40);
+        ctx.shadowBlur = 5 * currentScale;
+        ctx.textAlign = "left";
+        ctx.fillText("Điểm: " + score, 20 * currentScale, 40 * currentScale);
+        ctx.shadowBlur = 0; // Tắt shadow để không ảnh hưởng các bản vẽ khác
+      }
+
+      // --- Vẽ màn hình Game Over ---
+      function drawGameOver() {
+        ctx.fillStyle = "#e53935"; // Màu đỏ nổi bật
+        ctx.shadowColor = "rgba(0,0,0,0.8)";
+        ctx.shadowBlur = 8 * currentScale;
+        ctx.textAlign = "center";
+
+        ctx.font = `${
+          48 * currentScale
+        }px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
+        ctx.fillText(
+          "GAME OVER",
+          canvas.width / 2,
+          canvas.height / 2 - 40 * currentScale
+        );
+
+        ctx.font = `${
+          28 * currentScale
+        }px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
+        ctx.fillText(
+          "Điểm của bạn: " + score,
+          canvas.width / 2,
+          canvas.height / 2 + 10 * currentScale
+        );
+
+        ctx.font = `${
+          18 * currentScale
+        }px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif`;
+        ctx.fillText(
+          "Ấn Space hoặc chạm để chơi lại",
+          canvas.width / 2,
+          canvas.height / 2 + 60 * currentScale
+        );
         ctx.shadowBlur = 0;
       }
 
-      function drawGameOver() {
-        ctx.fillStyle = "#e53935";
-        ctx.font = '48px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
-        ctx.fillText("GAME OVER", 80, canvas.height / 2 - 20);
-        ctx.font = '28px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
-        ctx.fillText("Điểm của bạn: " + score, 110, canvas.height / 2 + 30);
-        ctx.font = '18px "Segoe UI", Tahoma, Geneva, Verdana, sans-serif';
-        ctx.fillText(
-          "Ấn Space hoặc chạm để chơi lại",
-          90,
-          canvas.height / 2 + 70
-        );
-      }
-
+      // --- Cập nhật vị trí các đám mây ---
       function updateClouds() {
-        clouds.forEach((cloud) => {
+        farClouds.forEach((cloud) => {
+          cloud.x += cloud.speed;
+          // Nếu mây ra khỏi màn hình, đặt lại vị trí ở bên phải
+          if (cloud.x - cloud.radius > canvas.width) {
+            cloud.x = -cloud.radius * 2;
+            cloud.y = Math.random() * (BASE_GAME_HEIGHT * 0.2) * currentScale;
+            cloud.radius = (40 + Math.random() * 20) * currentScale;
+            cloud.speed =
+              (baseFarCloudSpeed + Math.random() * 0.1) * currentScale;
+          }
+        });
+
+        closeClouds.forEach((cloud) => {
           cloud.x += cloud.speed;
           if (cloud.x - cloud.radius > canvas.width) {
-            cloud.x = -cloud.radius;
-            cloud.y = Math.random() * 150 + 20;
-            cloud.radius = 30 + Math.random() * 20;
-            cloud.speed = 0.5 + Math.random() * 0.3;
+            cloud.x = -cloud.radius * 2;
+            cloud.y =
+              Math.random() * (BASE_GAME_HEIGHT * 0.3) * currentScale +
+              BASE_GAME_HEIGHT * 0.1 * currentScale;
+            cloud.radius = (25 + Math.random() * 15) * currentScale;
+            cloud.speed =
+              (baseCloseCloudSpeed + Math.random() * 0.2) * currentScale;
           }
         });
       }
 
-      function drawClouds() {
-        clouds.forEach(drawCloud);
+      // --- Vẽ nền trời và mặt đất ---
+      function drawBackground() {
+        // Nền trời với gradient
+        const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        skyGradient.addColorStop(0, "#87ceeb"); // Xanh sáng
+        skyGradient.addColorStop(0.3, "#a0d2eb"); // Xanh trung bình
+        skyGradient.addColorStop(0.7, "#b0e0e6"); // Xanh nhạt hơn
+        skyGradient.addColorStop(1, "#c0e6ea"); // Xanh rất nhạt
+        ctx.fillStyle = skyGradient;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Mặt đất với gradient
+        const groundHeight = 80 * currentScale;
+        const groundY = canvas.height - groundHeight;
+        const groundGradient = ctx.createLinearGradient(
+          0,
+          groundY,
+          0,
+          canvas.height
+        );
+        groundGradient.addColorStop(0, "#7cb342"); // Xanh lá đậm
+        groundGradient.addColorStop(1, "#33691e"); // Xanh lá rất đậm
+        ctx.fillStyle = groundGradient;
+        ctx.fillRect(0, groundY, canvas.width, groundHeight);
+
+        // Các đường cong trên mặt đất để tạo cảm giác địa hình
+        ctx.strokeStyle = "rgba(0,0,0,0.1)"; // Đường viền mờ
+        ctx.lineWidth = 2 * currentScale;
+        ctx.beginPath();
+        ctx.moveTo(0, groundY + 10 * currentScale);
+        ctx.quadraticCurveTo(
+          canvas.width / 4,
+          groundY + 5 * currentScale,
+          canvas.width / 2,
+          groundY + 15 * currentScale
+        );
+        ctx.quadraticCurveTo(
+          (canvas.width * 3) / 4,
+          groundY + 20 * currentScale,
+          canvas.width,
+          groundY + 10 * currentScale
+        );
+        ctx.stroke();
       }
 
+      // --- Vòng lặp game chính ---
       function draw() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.clearRect(0, 0, canvas.width, canvas.height); // Xóa toàn bộ canvas
 
-        drawClouds();
-        updateClouds();
+        // Vẽ các yếu tố theo lớp (từ xa đến gần)
+        drawBackground();
+        farClouds.forEach((cloud) => drawCloud(cloud, 0.6)); // Mây xa hơn, trong suốt hơn
+        updateClouds(); // Cập nhật vị trí mây
 
-        pipes.forEach(drawPipe3D);
+        pipes.forEach(drawPipe3D); // Vẽ ống nước
+        drawBird(); // Vẽ chim
 
-        drawBird();
+        closeClouds.forEach((cloud) => drawCloud(cloud, 0.9)); // Mây gần hơn, ít trong suốt hơn
 
-        drawScore();
+        drawScore(); // Vẽ điểm số
 
+        // Nếu game over, chỉ hiển thị màn hình game over và dừng cập nhật game
         if (gameOver) {
           drawGameOver();
-          return;
+          return; // Dừng vòng lặp game
         }
 
-        bird.velocity += bird.gravity;
-        bird.y += bird.velocity;
+        // Cập nhật vị trí chim
+        bird.velocity += bird.gravity; // Áp dụng trọng lực
+        bird.y += bird.velocity; // Cập nhật vị trí Y
 
-        bird.rotation = Math.min(Math.max(bird.velocity / 10, -0.5), 0.8);
-
-        if (bird.y + bird.radius > canvas.height || bird.y - bird.radius < 0) {
+        // Giới hạn chim không bay ra khỏi màn hình trên hoặc dưới (dựa trên kích thước chim)
+        if (bird.y + bird.size / 2 > canvas.height) {
+          bird.y = canvas.height - bird.size / 2;
           gameOver = true;
         }
+        if (bird.y - bird.size / 2 < 0) {
+          bird.y = bird.size / 2;
+          bird.velocity = 0; // Dừng bay lên khi chạm nóc
+        }
 
-        updatePipes();
+        // Xoay chim theo vận tốc để tạo cảm giác bay lượn tự nhiên hơn
+        // Velocity âm (bay lên) -> rotation âm (ngóc đầu lên)
+        // Velocity dương (rơi xuống) -> rotation dương (cắm đầu xuống)
+        bird.rotation = Math.min(
+          Math.max(bird.velocity / (15 * currentScale), -0.5), // Giới hạn góc quay lên (-0.5 radian ~ -28 độ)
+          0.8 // Giới hạn góc quay xuống (0.8 radian ~ 45 độ)
+        );
 
-        frame++;
-        requestAnimationFrame(draw);
+        updatePipes(); // Cập nhật vị trí ống nước và kiểm tra va chạm
+
+        frame++; // Tăng frame cho animation
+        requestAnimationFrame(draw); // Lặp lại vòng lặp game ở frame tiếp theo
       }
 
+      // --- Hàm reset game ---
       function resetGame() {
-        bird.y = 250;
+        bird.y = bird.baseY * currentScale;
         bird.velocity = 0;
         bird.rotation = 0;
-        pipes = [];
+        bird.wingAngle = 0; // Đặt lại góc cánh
+        pipes = []; // Xóa tất cả ống nước
         frame = 0;
         score = 0;
         gameOver = false;
-        draw();
+        // Đặt lại vị trí ngẫu nhiên cho mây khi reset game
+        farClouds.forEach((cloud) => {
+          cloud.baseX = Math.random() * BASE_GAME_WIDTH;
+          cloud.baseY = Math.random() * (BASE_GAME_HEIGHT * 0.2);
+          cloud.x = cloud.baseX * currentScale;
+          cloud.y = cloud.baseY * currentScale;
+          cloud.radius = (40 + Math.random() * 20) * currentScale;
+          cloud.speed =
+            (baseFarCloudSpeed + Math.random() * 0.1) * currentScale;
+        });
+        closeClouds.forEach((cloud) => {
+          cloud.baseX = Math.random() * BASE_GAME_WIDTH;
+          cloud.baseY =
+            Math.random() * (BASE_GAME_HEIGHT * 0.3) + BASE_GAME_HEIGHT * 0.1;
+          cloud.x = cloud.baseX * currentScale;
+          cloud.y = cloud.baseY * currentScale;
+          cloud.radius = (25 + Math.random() * 15) * currentScale;
+          cloud.speed =
+            (baseCloseCloudSpeed + Math.random() * 0.2) * currentScale;
+        });
+        draw(); // Bắt đầu lại vòng lặp game
       }
 
+      // --- Xử lý sự kiện nhấn phím (cho PC) ---
       document.addEventListener("keydown", (e) => {
         if (e.code === "Space") {
+          e.preventDefault(); // Ngăn cuộn trang khi nhấn Space
           if (gameOver) resetGame();
-          else bird.velocity = bird.lift;
+          else bird.velocity = bird.lift; // Chim bay lên
         }
       });
 
-      canvas.addEventListener("click", () => {
+      // --- Xử lý sự kiện chạm màn hình (cho di động) ---
+      canvas.addEventListener("touchstart", (e) => {
+        e.preventDefault(); // Ngăn cuộn trang trên di động
         if (gameOver) resetGame();
-        else bird.velocity = bird.lift;
+        else bird.velocity = bird.lift; // Chim bay lên
       });
 
-      draw();
+      // --- Xử lý sự kiện thay đổi kích thước cửa sổ để responsive ---
+      window.addEventListener("resize", resize);
+
+      // --- Khởi tạo game ban đầu ---
+      resize(); // Thiết lập kích thước canvas và scale ban đầu
+      draw(); // Bắt đầu vòng lặp game
     </script>
   </body>
 </html>
